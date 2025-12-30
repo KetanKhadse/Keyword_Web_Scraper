@@ -5,7 +5,7 @@ from config.countries import COUNTRIES
 from config.company_types import COMPANY_TYPES
 from config.limits import LIMITS
 from services.lead_generator import generate_leads
-
+from config.regions import REGIONS
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
     page_title="Lead Generation Automation",
@@ -33,11 +33,18 @@ with col1:
         "Product",
         placeholder="e.g. Valve"
     )
-
-    country = st.selectbox(
-        "Target Country",
-        options=COUNTRIES
+    region = st.selectbox(
+    "Target Region",
+    options=["Single Country"] + list(REGIONS.keys()) + ["ALL"]
     )
+    country = None
+if region == "Single Country":
+    country = st.selectbox("Select Country", COUNTRIES)
+
+
+
+
+
 
 with col2:
     company_types = st.multiselect(
@@ -67,7 +74,8 @@ if start_btn:
             product=product,
             country=country,
             company_types=company_types,
-            limit=limit
+            limit=limit,
+            region= region
         )
 
     if not leads:

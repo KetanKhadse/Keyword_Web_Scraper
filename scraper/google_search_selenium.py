@@ -10,7 +10,7 @@ def search_companies(product, country, company_types, limit):
     options = Options()
     options.add_argument("--disable-blink-features=AutomationControlled")
     options.add_argument("--start-maximized")
-    # Keep this OFF for demo
+    # Keep headless OFF for demo
     # options.add_argument("--headless")
 
     driver = webdriver.Chrome(
@@ -19,32 +19,49 @@ def search_companies(product, country, company_types, limit):
     )
 
     collected_urls = set()
+    results_per_page = 10
+    max_pages = 10  # safety cap (can increase later)
 
     for ctype in company_types:
-        query = f"{product} {ctype} {country}"
-        print("Google search query:", query)
+        page = 0
 
-        driver.get(f"https://www.google.com/search?q={query}")
-        time.sleep(5)
+        while len(collected_urls) < limit and page < max_pages:
+            start = page * results_per_page
+            query = f"{product} {ctype} {country}"
 
-        links = driver.find_elements(By.CSS_SELECTOR, "a")
+            search_url = f"https://www.google.com/search?q={query}&start={start}"
+            print(f"Google search query: {query} | Page {page + 1}")
 
-        for link in links:
-            href = link.get_attribute("href")
+            driver.get(search_url)
+            time.sleep(4)
 
-            if (
-                href
-                and href.startswith("http")
-                and "google" not in href
-                and "youtube" not in href
-            ):
-                collected_urls.add(href)
+            links = driver.find_elements(By.CSS_SELECTOR, "a")
+            new_links_found = 0
 
-            if len(collected_urls) >= limit:
+            for link in links:
+                href = link.get_attribute("href")
+
+                if (
+                    href
+                    and href.startswith("http")
+                    and "google." not in href
+                    and "youtube.com" not in href
+                ):
+                    if href not in collected_urls:
+                        collected_urls.add(href)
+                        new_links_found += 1
+
+                if len(collected_urls) >= limit:
+                    break
+
+            print(f"New URLs found on page {page + 1}: {new_links_found}")
+
+            # If no new links were found, stop paginating
+            if new_links_found == 0:
+                print("No new results, stopping pagination for this query.")
                 break
 
-        if len(collected_urls) >= limit:
-            break
+            page += 1
 
     driver.quit()
 

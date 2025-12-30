@@ -9,31 +9,64 @@ HEADERS = {
     "User-Agent": "Mozilla/5.0"
 }
 
+def find_contact_page(soup, base_url):
+    keywords = ["contact", "about", "reach", "connect", "imprint"]
+
+    for a in soup.find_all("a", href=True):
+        href = a["href"].lower()
+        text = a.get_text().lower()
+
+        if any(k in href or k in text for k in keywords):
+            if href.startswith("http"):
+                return href
+            elif href.startswith("/"):
+                return base_url.rstrip("/") + href
+
+    return None
 
 def scrape_company(url):
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, headers=HEADERS, timeout=10)
         soup = BeautifulSoup(response.text, "html.parser")
-         #Company Name
+
         title = soup.title.text.strip() if soup.title else "Unknown Company"
 
-        #Email
-        emails = set(re.findall(EMAIL_REGEX, response.text))
-
-        # Contact
-        phones = set()
         text = soup.get_text(separator=" ")
-        for match in re.findall(PHONE_REGEX, text):
-            phone = "".join(match).strip()
-            if len(phone)>= 8:
-                phones.add(phone)
+
+        emails = set(re.findall(EMAIL_REGEX, text))
+        phones = set(re.findall(PHONE_REGEX, text))
+
+        linkedin = ""
+        for a in soup.find_all("a", href=True):
+            if "linkedin.com/company" in a["href"]:
+                linkedin = a["href"]
+                break
+
+        # 🔁 FOLLOW CONTACT PAGE IF DATA IS MISSING
+        if not emails or not phones:
+            contact_url = find_contact_page(soup, url)
+
+            if contact_url:
+                print("➡️ Following contact page:", contact_url)
+                try:
+                    c_resp = requests.get(contact_url, headers=HEADERS, timeout=10)
+                    c_soup = BeautifulSoup(c_resp.text, "html.parser")
+                    c_text = c_soup.get_text(separator=" ")
+
+                    emails.update(re.findall(EMAIL_REGEX, c_text))
+                    phones.update(re.findall(PHONE_REGEX, c_text))
+
+                except Exception:
+                    pass
 
         return {
             "company_name": title,
             "website": url,
             "email": ", ".join(emails) if emails else "",
-            "phone": ", ".join(phones) if phones else ""
+            "phone": ", ".join(phones) if phones else "",
+            "linkedin": linkedin
         }
 
-    except Exception:
+    except Exception as e:
+        print("Scrape failed:", e)
         return None
