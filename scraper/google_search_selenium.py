@@ -31,6 +31,9 @@ def search_companies(product, country, company_types, limit):
 
             search_url = f"https://www.google.com/search?q={query}&start={start}"
             print(f"Google search query: {query} | Page {page + 1}")
+            
+            # search_url = f"https://yandex.com/search?q={query}&start={start}"
+            # print(f"Yandex search query:{query} | Page {page + 1}")
 
             driver.get(search_url)
             time.sleep(4)

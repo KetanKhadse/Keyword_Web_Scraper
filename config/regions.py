@@ -23,18 +23,16 @@ REGIONS = {
         "Kuwait",
         "Oman",
         "Jordan",
-        "Turkey"
+        "Bahrain"
     ],
 
     "Asia": [
         "India",
-        "China",
         "Japan",
         "South Korea",
         "Singapore",
         "Malaysia",
         "Thailand",
-        "Vietnam",
         "Indonesia"
     ],
 
