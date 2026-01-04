@@ -1,72 +1,166 @@
-import time
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.common.action_chains import ActionChains
+from urllib.parse import quote_plus, urlparse, parse_qs
+import time
 
 
-def search_companies(product, country, company_types, limit):
+def extract_google_url(href):
+    # handles /url?q=realurl&sa=...
+    if "/url?" in href:
+        qs = parse_qs(urlparse(href).query)
+        if "q" in qs:
+            return qs["q"][0]
+    return href
+
+
+def search_companies(product, country, company_types, max_results):
     options = Options()
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("--start-maximized")
-    # Keep headless OFF for demo
-    # options.add_argument("--headless")
 
-    driver = webdriver.Chrome(
-        service=Service(ChromeDriverManager().install()),
-        options=options
+    # 🔥 anti-detection
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--start-maximized")
+    options.add_argument(
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     )
 
-    collected_urls = set()
-    results_per_page = 10
-    max_pages = 10  # safety cap (can increase later)
+    # ❗ DO NOT USE headless for Google
+    driver = webdriver.Chrome(options=options)
+    collected = set()
 
-    for ctype in company_types:
-        page = 0
-
-        while len(collected_urls) < limit and page < max_pages:
-            start = page * results_per_page
+    try:
+        for ctype in company_types:
             query = f"{product} {ctype} {country}"
 
-            search_url = f"https://www.google.com/search?q={query}&start={start}"
-            print(f"Google search query: {query} | Page {page + 1}")
-            
-            # search_url = f"https://yandex.com/search?q={query}&start={start}"
-            # print(f"Yandex search query:{query} | Page {page + 1}")
+            for page in range(0, 5):
+                url = (
+                    "https://www.google.com/search?"
+                    f"q={quote_plus(query)}&hl=en&gl=de&num=10&start={page*10}"
+                )
 
-            driver.get(search_url)
-            time.sleep(4)
+                print(f"🔎 Google: {query} | Page {page + 1}")
+                driver.get(url)
+                time.sleep(3)
 
-            links = driver.find_elements(By.CSS_SELECTOR, "a")
-            new_links_found = 0
+                # ✅ Handle consent (EU)
+                try:
+                    agree = driver.find_element(By.XPATH, "//button//*[text()='I agree']")
+                    agree.click()
+                    time.sleep(2)
+                except Exception:
+                    pass
 
-            for link in links:
-                href = link.get_attribute("href")
+                anchors = driver.find_elements(By.XPATH, "//a[@href]")
+                for a in anchors:
+                    href = a.get_attribute("href")
+                    if not href:
+                        continue
 
-                if (
-                    href
-                    and href.startswith("http")
-                    and "google." not in href
-                    and "youtube.com" not in href
-                ):
-                    if href not in collected_urls:
-                        collected_urls.add(href)
-                        new_links_found += 1
+                    if "/url?" in href or href.startswith("http"):
+                        real = extract_google_url(href)
 
-                if len(collected_urls) >= limit:
+                        parsed = urlparse(real)
+                        if parsed.scheme.startswith("http") and parsed.netloc:
+                            collected.add(real)
+
+                if len(collected) >= max_results:
                     break
 
-            print(f"New URLs found on page {page + 1}: {new_links_found}")
+    finally:
+        driver.quit()
 
-            # If no new links were found, stop paginating
-            if new_links_found == 0:
-                print("No new results, stopping pagination for this query.")
-                break
+    return list(collected)
 
-            page += 1
 
-    driver.quit()
 
-    print(f"Collected {len(collected_urls)} URLs")
-    return list(collected_urls)
+# from selenium import webdriver
+# from selenium.webdriver.common.by import By
+# from selenium.webdriver.chrome.options import Options
+# from selenium.webdriver.support.ui import WebDriverWait
+# from selenium.webdriver.support import expected_conditions as EC
+# import time
+# import urllib.parse
+
+
+# def search_companies(product, country, company_types, limit=20, max_pages=10):
+#     """
+#     Google search scraper (STALE-SAFE)
+#     Returns unique result URLs
+#     """
+
+#     options = Options()
+#     options.add_argument("--disable-blink-features=AutomationControlled")
+#     options.add_argument("--start-maximized")
+
+#     driver = webdriver.Chrome(options=options)
+#     wait = WebDriverWait(driver, 10)
+
+#     collected_urls = set()
+
+#     try:
+#         for company_type in company_types:
+#             page = 0
+
+#             while len(collected_urls) < limit and page < max_pages:
+#                 query = f"{product} {company_type} {country}"
+#                 encoded_query = urllib.parse.quote_plus(query)
+
+#                 start = page * 10
+#                 search_url = f"https://www.google.com/search?q={encoded_query}&start={start}"
+
+#                 print(f"Google search query: {query} | Page {page + 1}")
+#                 driver.get(search_url)
+
+#                 time.sleep(2)
+
+#                 # Wait for search results container
+#                 wait.until(EC.presence_of_element_located((By.ID, "search")))
+
+#                 # 🔑 CRITICAL FIX:
+#                 # Extract hrefs directly from DOM (not WebElement reuse)
+#                 links = driver.find_elements(By.XPATH, "//div[@id='search']//a[@href]")
+
+#                 new_urls = 0
+
+#                 for link in links:
+#                     try:
+#                         href = link.get_attribute("href")
+#                     except:
+#                         continue
+
+#                     if not href:
+#                         continue
+
+#                     # Filter garbage
+#                     if any(x in href for x in [
+#                         "google.com",
+#                         "/search?",
+#                         "/preferences?",
+#                         "policies.google.com",
+#                         "support.google.com"
+#                     ]):
+#                         continue
+
+#                     if href not in collected_urls:
+#                         collected_urls.add(href)
+#                         new_urls += 1
+
+#                         if len(collected_urls) >= limit:
+#                             break
+
+#                 print(f"New URLs found on page {page + 1}: {new_urls}")
+
+#                 if new_urls == 0:
+#                     break
+
+#                 page += 1
+#                 time.sleep(1)
+
+#     finally:
+#         driver.quit()
+
+#     return list(collected_urls)
