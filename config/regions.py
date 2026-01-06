@@ -27,7 +27,6 @@ REGIONS = {
     ],
 
     "Asia": [
-        "India",
         "Japan",
         "South Korea",
         "Singapore",

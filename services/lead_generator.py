@@ -7,31 +7,117 @@ from scraper.linkedin_finder import find_linkedin
 from services.excel_service import generate_excel
 from config.regions import REGIONS
 
-BAD_EXTENSIONS = (".pdf", ".doc", ".xls", ".zip")
-DELAY = 1.2
+# ---------------- CONFIG ---------------- #
+
+BAD_EXTENSIONS = (
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip"
+)
+
+DELAY_BETWEEN_QUERIES = 1.2
+
+CHINA_FOOTER_KEYWORDS = [
+    "china",
+    "people's republic of china",
+    "prc",
+    "made in china",
+    "china office",
+    "china branch",
+    "chinese subsidiary",
+    "shanghai",
+    "shenzhen",
+    "beijing",
+    "guangzhou",
+    "zhejiang",
+    "guangdong"
+]
+
+# -------------------------------------- #
 
 
-def is_valid_url(url):
+# ---------------- HELPERS ---------------- #
+
+def is_valid_url(url: str) -> bool:
     parsed = urlparse(url)
+
     if not parsed.netloc:
         return False
+
     if parsed.netloc.endswith(".cn"):
         return False
-    if any(url.lower().endswith(e) for e in BAD_EXTENSIONS):
+
+    if any(url.lower().endswith(ext) for ext in BAD_EXTENSIONS):
         return False
+
     return True
 
 
-def resolve_countries(country, region):
+def split_product_terms(product_string: str) -> list[str]:
+    return [p.strip() for p in product_string.split(",") if p.strip()]
+
+
+def resolve_countries(country: str | None, region: str | None) -> list[str]:
     if region and region in REGIONS:
         return REGIONS[region]
+
     if country:
         return [country]
+
     return []
 
 
-def generate_leads(product, country, company_types, limit, region=None):
-    product_terms = [p.strip() for p in product.split(",") if p.strip()]
+def build_hq_keywords(country: str | None, region: str | None) -> list[str]:
+    """
+    Dynamically build HQ keywords from selected country / region.
+    NO hardcoding of regions.
+    """
+    keywords = [
+        "headquarters",
+        "head office",
+        "corporate office",
+        "registered office",
+        "hq"
+    ]
+
+    if country:
+        keywords.append(country.lower())
+
+    if region and region in REGIONS:
+        for c in REGIONS[region]:
+            keywords.append(c.lower())
+
+    return list(set(keywords))
+
+
+def is_china_affiliated_footer(footer_text: str, hq_keywords: list[str]) -> bool:
+    """
+    Reject company ONLY if:
+    - China keywords present in footer
+    - AND no HQ country/region keywords present
+    """
+    if not footer_text:
+        return False
+
+    footer_text = footer_text.lower()
+
+    has_china = any(k in footer_text for k in CHINA_FOOTER_KEYWORDS)
+    has_hq = any(k in footer_text for k in hq_keywords)
+
+    return has_china and not has_hq
+
+
+# ---------------- MAIN ---------------- #
+
+def generate_leads(
+    product: str,
+    country: str | None,
+    company_types: list[str],
+    limit: int,
+    region: str | None = None
+):
+    print("=== Lead generation started ===")
+    print("Limit:", limit)
+
+    product_terms = split_product_terms(product)
     countries = resolve_countries(country, region)
 
     leads = []
@@ -39,11 +125,13 @@ def generate_leads(product, country, company_types, limit, region=None):
 
     for c in countries:
         print(f"\n🌍 Country: {c}")
-        count = 0
+        collected_for_country = 0
+
+        hq_keywords = build_hq_keywords(country=c, region=region)
 
         for term in product_terms:
             for ctype in company_types:
-                if count >= limit:
+                if collected_for_country >= limit:
                     break
 
                 urls = search_companies(
@@ -54,43 +142,150 @@ def generate_leads(product, country, company_types, limit, region=None):
                 )
 
                 for url in urls:
-                    if count >= limit:
+                    if collected_for_country >= limit:
                         break
 
                     if not is_valid_url(url):
                         continue
 
-                    domain = urlparse(url).netloc.replace("www.", "")
+                    domain = urlparse(url).netloc.lower().replace("www.", "")
                     if domain in seen_domains:
                         continue
 
                     data = scrape_company(url)
 
-                    # 🇨🇳 Final China exclusion (content based)
-                    if ".cn" in domain:
+                    # ❌ Footer-based China affiliation rejection
+                    if is_china_affiliated_footer(
+                        data.get("footer_text", ""),
+                        hq_keywords
+                    ):
+                        print(f"❌ China-affiliated (footer): {data.get('company_name')}")
                         continue
 
                     data["linkedin"] = find_linkedin(
-                        company_name=data["company_name"],
+                        company_name=data.get("company_name"),
                         website=url
                     )
 
-                    data["country"] = c
                     data["products"] = term
+                    data["country"] = c
                     data["domain"] = domain
 
-                    seen_domains.add(domain)
                     leads.append(data)
-                    count += 1
+                    seen_domains.add(domain)
+                    collected_for_country += 1
 
-                    print(f"✅ {count}/{limit}: {data['company_name']}")
+                    print(
+                        f"✅ Added ({collected_for_country}/{limit}): "
+                        f"{data.get('company_name')}"
+                    )
 
-                time.sleep(DELAY)
+                time.sleep(DELAY_BETWEEN_QUERIES)
 
-        print(f"✔ Collected {count} companies for {c}")
+        print(f"✔ Collected {collected_for_country} companies for {c}")
 
+    print(f"\n✅ Total leads collected: {len(leads)}")
     excel_path = generate_excel(leads)
+
     return leads, excel_path
+
+
+
+
+
+# from urllib.parse import urlparse
+# import time
+
+# from scraper.google_search_selenium import search_companies
+# from scraper.website_scraper import scrape_company
+# from scraper.linkedin_finder import find_linkedin
+# from services.excel_service import generate_excel
+# from config.regions import REGIONS
+
+# BAD_EXTENSIONS = (".pdf", ".doc", ".xls", ".zip")
+# DELAY = 1.2
+
+
+# def is_valid_url(url):
+#     parsed = urlparse(url)
+#     if not parsed.netloc:
+#         return False
+#     if parsed.netloc.endswith(".cn"):
+#         return False
+#     if any(url.lower().endswith(e) for e in BAD_EXTENSIONS):
+#         return False
+#     return True
+
+
+# def resolve_countries(country, region):
+#     if region and region in REGIONS:
+#         return REGIONS[region]
+#     if country:
+#         return [country]
+#     return []
+
+
+# def generate_leads(product, country, company_types, limit, region=None):
+#     product_terms = [p.strip() for p in product.split(",") if p.strip()]
+#     countries = resolve_countries(country, region)
+
+#     leads = []
+#     seen_domains = set()
+
+#     for c in countries:
+#         print(f"\n🌍 Country: {c}")
+#         count = 0
+
+#         for term in product_terms:
+#             for ctype in company_types:
+#                 if count >= limit:
+#                     break
+
+#                 urls = search_companies(
+#                     product=term,
+#                     country=c,
+#                     company_types=[ctype],
+#                     max_results=limit * 5
+#                 )
+
+#                 for url in urls:
+#                     if count >= limit:
+#                         break
+
+#                     if not is_valid_url(url):
+#                         continue
+
+#                     domain = urlparse(url).netloc.replace("www.", "")
+#                     if domain in seen_domains:
+#                         continue
+
+#                     data = scrape_company(url)
+
+#                     # 🇨🇳 Final China exclusion (content based)
+#                     if ".cn" in domain:
+#                         continue
+
+#                     data["linkedin"] = find_linkedin(
+#                         company_name=data["company_name"],
+#                         website=url
+#                     )
+
+#                     data["country"] = c
+#                     data["products"] = term
+#                     data["domain"] = domain
+
+#                     seen_domains.add(domain)
+#                     leads.append(data)
+#                     count += 1
+
+#                     print(f"✅ {count}/{limit}: {data['company_name']}")
+
+#                 time.sleep(DELAY)
+
+#         print(f"✔ Collected {count} companies for {c}")
+
+#     excel_path = generate_excel(leads)
+#     return leads, excel_path
 
 
 
