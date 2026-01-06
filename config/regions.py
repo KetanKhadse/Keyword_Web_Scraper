@@ -57,5 +57,8 @@ REGIONS = {
     ],
     "Russia":[
         "Russia"
+    ],
+    "Austrelia":[
+        "Austrelia"
     ]
 }
