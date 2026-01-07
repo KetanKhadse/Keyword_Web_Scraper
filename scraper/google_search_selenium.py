@@ -15,6 +15,7 @@ def extract_google_url(href):
     return href
 
 
+
 def search_companies(product, country, company_types, max_results):
     options = Options()
 
@@ -36,11 +37,15 @@ def search_companies(product, country, company_types, max_results):
         for ctype in company_types:
             query = f"{product} {ctype} {country}"
 
-            for page in range(0, 5):
+            for page in range(0, 25):
                 url = (
                     "https://www.google.com/search?"
                     f"q={quote_plus(query)}&hl=en&gl=de&num=10&start={page*10}"
                 )
+                # url = (
+                #     "https://www.bing.com/search?"
+                #     f"q={quote_plus(query)}&hl=en&gl=de&num=10&start={page*10}"
+                # )
 
                 print(f"🔎 Google: {query} | Page {page + 1}")
                 driver.get(url)

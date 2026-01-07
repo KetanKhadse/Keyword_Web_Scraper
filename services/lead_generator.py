@@ -12,8 +12,8 @@ from config.regions import REGIONS
 BAD_EXTENSIONS = (
     ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip"
 )
-
-DELAY_BETWEEN_QUERIES = 1.2
+CAPTCHA_WAIT_SECONDS = 30 
+DELAY_BETWEEN_QUERIES = 1.5
 
 CHINA_FOOTER_KEYWORDS = [
     "china",
@@ -140,6 +140,13 @@ def generate_leads(
                     company_types=[ctype],
                     max_results=limit * 5
                 )
+
+                 # 🟡 CAPTCHA MANUAL WINDOW (CORRECT PLACE)
+                print(
+                    f"\n⏳ Waiting {CAPTCHA_WAIT_SECONDS} seconds — "
+                    f"solve CAPTCHA in browser if shown..."
+                )
+                time.sleep(CAPTCHA_WAIT_SECONDS)
 
                 for url in urls:
                     if collected_for_country >= limit:
