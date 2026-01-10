@@ -131,7 +131,7 @@ def search_companies(product, country, company_types, max_results):
         for ctype in company_types:
             query = f"{product} {ctype} in {country}"
 
-            for page in range(0,20):
+            for page in range(0,12):
                 url = (
                     "https://www.google.com/search?"
                     f"q={quote_plus(query)}&hl=en&gl=de&num=10&start={page*10}"
@@ -147,7 +147,7 @@ def search_companies(product, country, company_types, max_results):
 
                 print(f"🔎 Google: {query} | Page {page + 1}")
                 driver.get(url)
-                time.sleep(15)
+                time.sleep(12)
 
                 # ✅ Handle consent (EU)
                 try:
@@ -157,11 +157,20 @@ def search_companies(product, country, company_types, max_results):
                 except Exception:
                     pass
 
+
+
+
                 anchors = driver.find_elements(By.XPATH, "//a[@href]")
                 for a in anchors:
-                    href = a.get_attribute("href")
-                    if not href:
-                        continue
+                    try:
+                       href = a.get_attribute("href")
+                    except:
+                         continue
+
+                # for a in anchors:
+                #     href = a.get_attribute("href")
+                #     if not href:
+                #         continue
 
                     if "/url?" in href or href.startswith("http"):
                         real = extract_google_url(href)

@@ -102,14 +102,18 @@ if start_btn:
     st.success(f"Found {len(leads)} companies")
     st.dataframe(leads, width='stretch')
 
-    # -------- Excel download (SAFE) --------
-    if excel_path and os.path.exists(excel_path):
-        with open(excel_path, "rb") as f:
-            st.download_button(
-                label="⬇️ Download Excel",
-                data=f,
-                file_name=os.path.basename(excel_path),
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-    else:
-        st.warning("Excel file could not be generated.")
+    st.success(f"Found {len(leads)} companies across all countries")
+    st.info("📁 Excel files were automatically exported country-wise to the output folder")
+    st.dataframe(leads, width='stretch')
+
+    # # -------- Excel download (SAFE) --------
+    # if excel_path and os.path.exists(excel_path):
+    #     with open(excel_path, "rb") as f:
+    #         st.download_button(
+    #             label="⬇️ Download Excel",
+    #             data=f,
+    #             file_name=os.path.basename(excel_path),
+    #             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    #         )
+    # else:
+    #     st.warning("Excel file could not be generated.")

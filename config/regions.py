@@ -12,7 +12,13 @@ REGIONS = {
         "Sweden",
         "Norway",
         "Finland",
-        "Poland"
+        "Poland",
+        "Denmark",
+        "Finland",
+        "Switzerland",
+        "Greece",
+        "Hungary"
+        
     ],
 
     "Middle East": [
@@ -28,11 +34,11 @@ REGIONS = {
 
     "Asia": [
         "Japan",
-        "South Korea",
-        "Singapore",
-        "Malaysia",
-        "Thailand",
-        "Indonesia"
+        "South Korea"
+        # "Singapore",
+        # "Malaysia",
+        # "Thailand",
+        # "Indonesia"
     ],
 
     "North America": [

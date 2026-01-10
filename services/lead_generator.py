@@ -16,49 +16,22 @@ BAD_EXTENSIONS = (
 DELAY_BETWEEN_QUERIES = 1.5
 
 CHINA_KEYWORDS = [
-    "china",
-    "people's republic of china",
-    "prc",
-    "made in china",
-    "china office",
-    "china branch",
-    "chinese subsidiary",
-    "shanghai",
-    "shenzhen",
-    "beijing",
-    "guangzhou",
-    "zhejiang",
-    "guangdong"
+    "china", "people's republic of china", "prc", "made in china",
+    "china office", "china branch", "chinese subsidiary",
+    "shanghai", "shenzhen", "beijing", "guangzhou",
+    "zhejiang", "guangdong"
 ]
 
 INDIA_KEYWORDS = [
-    "india",
-    "bharat",
-    "made in india",
-    "india office",
-    "india branch",
-    "indian subsidiary",
-    "new delhi",
-    "mumbai",
-    "bangalore",
-    "bengaluru",
-    "chennai",
-    "hyderabad",
-    "pune",
-    "ahmedabad"
+    "india", "bharat", "made in india", "india office",
+    "india branch", "indian subsidiary",
+    "new delhi", "mumbai", "bangalore", "bengaluru",
+    "chennai", "hyderabad", "pune", "ahmedabad"
 ]
-
-# -------------------------------------- #
-
 
 # ---------------- HELPERS ---------------- #
 
 def is_valid_url(url: str) -> bool:
-    """
-    ONLY filter:
-    - invalid URLs
-    - unwanted file formats
-    """
     parsed = urlparse(url)
 
     if not parsed.netloc:
@@ -85,16 +58,11 @@ def resolve_countries(country: str | None, region: str | None) -> list[str]:
 
 
 def detect_affiliation(text: str, keywords: list[str]) -> bool:
-    """
-    Generic country signal detector.
-    FLAG ONLY — no rejection.
-    """
     if not text:
         return False
 
     text = text.lower()
     return any(k in text for k in keywords)
-
 
 # ---------------- MAIN ---------------- #
 
@@ -106,16 +74,18 @@ def generate_leads(
     region: str | None = None
 ):
     print("=== Lead generation started ===")
-    print("Limit:", limit)
+    print("Limit per country:", limit)
 
     product_terms = split_product_terms(product)
     countries = resolve_countries(country, region)
 
-    leads = []
-    seen_domains = set()
+    all_leads = []
 
     for c in countries:
         print(f"\n🌍 Country: {c}")
+
+        leads = []
+        seen_domains = set()
         collected_for_country = 0
 
         for term in product_terms:
@@ -149,16 +119,14 @@ def generate_leads(
                         data.get("about_text", "")
                     ])
 
-                    # 🇨🇳 China signal (FLAG ONLY)
+                    # 🇨🇳 FLAG ONLY
                     data["china_affiliation"] = detect_affiliation(
-                        combined_text,
-                        CHINA_KEYWORDS
+                        combined_text, CHINA_KEYWORDS
                     )
 
-                    # 🇮🇳 India signal (FLAG ONLY)
+                    # 🇮🇳 FLAG ONLY
                     data["india_affiliation"] = detect_affiliation(
-                        combined_text,
-                        INDIA_KEYWORDS
+                        combined_text, INDIA_KEYWORDS
                     )
 
                     data["linkedin"] = find_linkedin(
@@ -171,6 +139,8 @@ def generate_leads(
                     data["domain"] = domain
 
                     leads.append(data)
+                    all_leads.append(data)
+
                     seen_domains.add(domain)
                     collected_for_country += 1
 
@@ -183,20 +153,19 @@ def generate_leads(
 
         print(f"✔ Collected {collected_for_country} companies for {c}")
 
-    print(f"\n✅ Total leads collected: {len(leads)}")
+        # 🚫 REMOVE FLAGS FROM EXCEL
+        excel_rows = []
+        for lead in leads:
+            clean = lead.copy()
+            clean.pop("china_affiliation", None)
+            clean.pop("india_affiliation", None)
+            excel_rows.append(clean)
 
-    # 🚫 Do NOT export flags to Excel
-    excel_leads = []
-    for lead in leads:
-        clean_lead = lead.copy()
-        clean_lead.pop("china_affiliation", None)
-        clean_lead.pop("india_affiliation", None)
-        excel_leads.append(clean_lead)
+        # 🔥 AUTO EXPORT PER COUNTRY
+        generate_excel(excel_rows, country_name=c)
 
-    excel_path = generate_excel(excel_leads)
-
-    return leads, excel_path
-
+    print(f"\n✅ Total leads collected: {len(all_leads)}")
+    return all_leads, None
 
 
 
