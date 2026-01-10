@@ -61,4 +61,8 @@ REGIONS = {
     "Austrelia":[
         "Austrelia"
     ]
+    # ,
+    # "Custom":
+    # ["Algeria","Egypt", "Libya", "Morocco","Tunisia","Mauritania","Sudan","Nigeria","Ghana","Senegal","Ivory Coast","Kenya",
+    #  "Tanzania","Ethiopia","Uganda",]
 }

@@ -58,7 +58,7 @@ with col2:
 st.divider()
 
 # ---------------- ACTION BUTTON ----------------
-start_btn = st.button("🚀 Start Lead Generation", use_container_width=True)
+start_btn = st.button("🚀 Start Lead Generation", width='stretch')
 
 # ---------------- PROCESSING ----------------
 if start_btn:
@@ -100,7 +100,7 @@ if start_btn:
         st.stop()
 
     st.success(f"Found {len(leads)} companies")
-    st.dataframe(leads, use_container_width=True)
+    st.dataframe(leads, width='stretch')
 
     # -------- Excel download (SAFE) --------
     if excel_path and os.path.exists(excel_path):

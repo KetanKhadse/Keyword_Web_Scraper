@@ -8,7 +8,7 @@ EMAIL_REGEX = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
 PHONE_REGEX = r"(\+?\d[\d\s\-\(\)]{8,}\d)"
 
 CONTACT_KEYWORDS = ["contact", "about", "imprint", "legal"]
-TIMEOUT = 12
+TIMEOUT = 5
 
 
 def scrape_company(url):
@@ -17,7 +17,6 @@ def scrape_company(url):
         r.raise_for_status()
 
         soup = BeautifulSoup(r.text, "html.parser")
-
         name = soup.title.text.strip() if soup.title else urlparse(url).netloc
         text = soup.get_text(" ", strip=True)
 

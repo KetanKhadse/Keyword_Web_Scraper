@@ -1,3 +1,85 @@
+# from selenium import webdriver
+# from selenium.webdriver.common.by import By
+# from selenium.webdriver.chrome.options import Options
+# from selenium.common.exceptions import StaleElementReferenceException
+# from urllib.parse import quote_plus, urlparse
+# import time
+
+
+# def search_companies(product, country, company_types, max_results):
+#     """
+#     Brave Search scraper
+#     - Uses Brave browser
+#     - Uses Brave Search engine
+#     - Returns clean company URLs
+#     """
+
+#     options = Options()
+
+#     # ✅ USE BRAVE BROWSER
+#     options.binary_location = r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"
+
+#     # 🔒 Anti-detection (safe)
+#     options.add_argument("--disable-blink-features=AutomationControlled")
+#     options.add_argument("--start-maximized")
+#     options.add_argument("--no-sandbox")
+#     options.add_argument("--disable-dev-shm-usage")
+
+#     # ❌ Do NOT use headless
+#     driver = webdriver.Chrome(options=options)
+
+#     collected = set()
+
+#     try:
+#         for ctype in company_types:
+#             query = f"{product} {ctype} {country}"
+
+#             # Brave Search pagination uses page=1,2,3...
+#             for page in range(1, 11):  # ~100 results max
+#                 if len(collected) >= max_results:
+#                     break
+
+#                 url = (
+#                     "https://search.brave.com/search?"
+#                     f"q={quote_plus(query)}&page={page}"
+#                 )
+
+#                 print(f"🦁 Brave Search: {query} | Page {page}")
+#                 driver.get(url)
+
+#                 # ⏳ Give time for page + manual intervention if needed
+#                 time.sleep(5)
+
+#                 try:
+#                     results = driver.find_elements(
+#                         By.XPATH,
+#                         "//a[@data-testid='result-title-a']"
+#                     )
+#                 except Exception:
+#                     continue
+
+#                 for a in results:
+#                     if len(collected) >= max_results:
+#                         break
+
+#                     try:
+#                         href = a.get_attribute("href")
+#                     except StaleElementReferenceException:
+#                         continue
+
+#                     if not href:
+#                         continue
+
+#                     parsed = urlparse(href)
+#                     if parsed.scheme.startswith("http") and parsed.netloc:
+#                         collected.add(href)
+
+#     finally:
+#         driver.quit()
+
+#     return list(collected)
+
+
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -19,25 +101,37 @@ def extract_google_url(href):
 def search_companies(product, country, company_types, max_results):
     options = Options()
 
-    # 🔥 anti-detection
+    #🔥 anti-detection
+    # options.add_argument("--disable-blink-features=AutomationControlled")
+    # options.add_argument("--no-sandbox")
+    # options.add_argument("--disable-dev-shm-usage")
+    # options.add_argument("--start-maximized")
+    # options.add_argument(
+    #     "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    #     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    # )
+    # # ✅ USE YOUR LOGGED-IN CHROME PROFILE
+    options.add_argument(
+        r"--user-data-dir=C:\Users\Hp\AppData\Local\Google\Chrome\User Data\Default"
+    )
+    options.add_argument("--profile-directory=Default")
+
+    # 🔒 Anti-detection (safe)
     options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--start-maximized")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--start-maximized")
-    options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    )
 
     # ❗ DO NOT USE headless for Google
     driver = webdriver.Chrome(options=options)
     collected = set()
+    
 
     try:
         for ctype in company_types:
-            query = f"{product} {ctype} {country}"
+            query = f"{product} {ctype} in {country}"
 
-            for page in range(0, 25):
+            for page in range(0,20):
                 url = (
                     "https://www.google.com/search?"
                     f"q={quote_plus(query)}&hl=en&gl=de&num=10&start={page*10}"
@@ -46,10 +140,14 @@ def search_companies(product, country, company_types, max_results):
                 #     "https://www.bing.com/search?"
                 #     f"q={quote_plus(query)}&hl=en&gl=de&num=10&start={page*10}"
                 # )
+                # url = (
+                #     "https://search.brave.com/search?"
+                #     f"q={quote_plus(query)}&hl=en&gl=de&num=10&start={page*10}"
+                # )
 
                 print(f"🔎 Google: {query} | Page {page + 1}")
                 driver.get(url)
-                time.sleep(3)
+                time.sleep(15)
 
                 # ✅ Handle consent (EU)
                 try:
@@ -79,6 +177,9 @@ def search_companies(product, country, company_types, max_results):
         driver.quit()
 
     return list(collected)
+
+
+
 
 
 
