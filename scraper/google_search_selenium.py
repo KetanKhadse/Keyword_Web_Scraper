@@ -102,25 +102,25 @@ def search_companies(product, country, company_types, max_results):
     options = Options()
 
     #🔥 anti-detection
-    # options.add_argument("--disable-blink-features=AutomationControlled")
-    # options.add_argument("--no-sandbox")
-    # options.add_argument("--disable-dev-shm-usage")
-    # options.add_argument("--start-maximized")
-    # options.add_argument(
-    #     "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    #     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    # )
-    # # ✅ USE YOUR LOGGED-IN CHROME PROFILE
-    options.add_argument(
-        r"--user-data-dir=C:\Users\Hp\AppData\Local\Google\Chrome\User Data\Default"
-    )
-    options.add_argument("--profile-directory=Default")
-
-    # 🔒 Anti-detection (safe)
     options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument("--start-maximized")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--start-maximized")
+    options.add_argument(
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    )
+    # ✅ USE YOUR LOGGED-IN CHROME PROFILE
+    # options.add_argument(
+    #     r"--user-data-dir=C:\Users\Hp\AppData\Local\Google\Chrome\User Data\Default"
+    # )
+    # options.add_argument("--profile-directory=Default")
+
+    # # 🔒 Anti-detection (safe)
+    # options.add_argument("--disable-blink-features=AutomationControlled")
+    # options.add_argument("--start-maximized")
+    # options.add_argument("--no-sandbox")
+    # options.add_argument("--disable-dev-shm-usage")
 
     # ❗ DO NOT USE headless for Google
     driver = webdriver.Chrome(options=options)
@@ -131,19 +131,11 @@ def search_companies(product, country, company_types, max_results):
         for ctype in company_types:
             query = f"{product} {ctype} in {country}"
 
-            for page in range(0,20):
+            for page in range(0,15):
                 url = (
                     "https://www.google.com/search?"
                     f"q={quote_plus(query)}&hl=en&gl=de&num=10&start={page*10}"
                 )
-                # url = (
-                #     "https://www.bing.com/search?"
-                #     f"q={quote_plus(query)}&hl=en&gl=de&num=10&start={page*10}"
-                # )
-                # url = (
-                #     "https://search.brave.com/search?"
-                #     f"q={quote_plus(query)}&hl=en&gl=de&num=10&start={page*10}"
-                # )
 
                 print(f"🔎 Google: {query} | Page {page + 1}")
                 driver.get(url)

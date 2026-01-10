@@ -1,23 +1,38 @@
 import requests
 import re
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse
 
-HEADERS = {"User-Agent": "Mozilla/5.0"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept": "text/html"
+}
+
 EMAIL_REGEX = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
 PHONE_REGEX = r"(\+?\d[\d\s\-\(\)]{8,}\d)"
 
-CONTACT_KEYWORDS = ["contact", "about", "imprint", "legal"]
-TIMEOUT = 5
+# ⛔ HARD limits
+CONNECT_TIMEOUT = 3
+READ_TIMEOUT = 5
+MAX_HTML_SIZE = 2_000_000  # 2MB
 
 
 def scrape_company(url):
     try:
-        r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-        r.raise_for_status()
+        session = requests.Session()
+        session.headers.update(HEADERS)
 
-        soup = BeautifulSoup(r.text, "html.parser")
-        name = soup.title.text.strip() if soup.title else urlparse(url).netloc
+        r = session.get(
+            url,
+            timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
+            allow_redirects=True,
+            stream=True
+        )
+
+        content = r.raw.read(MAX_HTML_SIZE, decode_content=True)
+        soup = BeautifulSoup(content, "html.parser")
+
+        title = soup.title.text.strip() if soup.title else urlparse(url).netloc
         text = soup.get_text(" ", strip=True)
 
         emails = set(re.findall(EMAIL_REGEX, text))
@@ -30,23 +45,76 @@ def scrape_company(url):
                 break
 
         return {
-            "company_name": name,
+            "company_name": title,
             "website": url,
             "email": ", ".join(emails),
             "phone": ", ".join(phones),
-            "linkedin": linkedin,
-            "raw_text": text.lower()
+            "linkedin": linkedin
+            # "about_text": text[:3000],  # prevent bloat
+            # "footer_text": ""
         }
 
-    except Exception:
+    except Exception as e:
         return {
             "company_name": urlparse(url).netloc,
             "website": url,
             "email": "",
             "phone": "",
-            "linkedin": "",
-            "raw_text": ""
+            "linkedin": ""
+            # "about_text": "",
+            # "footer_text": ""
         }
+
+
+# import requests
+# import re
+# from bs4 import BeautifulSoup
+# from urllib.parse import urlparse, urljoin
+
+# HEADERS = {"User-Agent": "Mozilla/5.0"}
+# EMAIL_REGEX = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+# PHONE_REGEX = r"(\+?\d[\d\s\-\(\)]{8,}\d)"
+
+# CONTACT_KEYWORDS = ["contact", "about", "imprint", "legal"]
+# TIMEOUT = 5
+
+
+# def scrape_company(url):
+#     try:
+#         r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+#         r.raise_for_status()
+
+#         soup = BeautifulSoup(r.text, "html.parser")
+#         name = soup.title.text.strip() if soup.title else urlparse(url).netloc
+#         text = soup.get_text(" ", strip=True)
+
+#         emails = set(re.findall(EMAIL_REGEX, text))
+#         phones = set(re.findall(PHONE_REGEX, text))
+
+#         linkedin = ""
+#         for a in soup.find_all("a", href=True):
+#             if "linkedin.com/company" in a["href"]:
+#                 linkedin = a["href"]
+#                 break
+
+#         return {
+#             "company_name": name,
+#             "website": url,
+#             "email": ", ".join(emails),
+#             "phone": ", ".join(phones),
+#             "linkedin": linkedin,
+#             "raw_text": text.lower()
+#         }
+
+#     except Exception:
+#         return {
+#             "company_name": urlparse(url).netloc,
+#             "website": url,
+#             "email": "",
+#             "phone": "",
+#             "linkedin": "",
+#             "raw_text": ""
+#         }
 
 
 # import requests
