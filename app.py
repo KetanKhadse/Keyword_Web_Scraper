@@ -5,6 +5,7 @@ from config.company_types import COMPANY_TYPES
 from config.limits import LIMITS
 from config.regions import REGIONS
 import os
+import pandas as pd
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
@@ -58,7 +59,7 @@ with col2:
 st.divider()
 
 # ---------------- ACTION BUTTON ----------------
-start_btn = st.button("🚀 Start Lead Generation", width='stretch')
+start_btn = st.button("🚀 Start Lead Generation", use_container_width=True)
 
 # ---------------- PROCESSING ----------------
 if start_btn:
@@ -82,9 +83,9 @@ if start_btn:
 
     st.session_state.running = True
 
-    # -------- Run backend --------
-    with st.spinner("Generating leads..."):
-        leads, excel_path = generate_leads(
+    # -------- Run backend (NO UNPACKING) --------
+    with st.spinner("Generating leads (safe & resumable)..."):
+        excel_path = generate_leads(
             product=product.strip(),
             country=country,
             company_types=company_types,
@@ -92,24 +93,43 @@ if start_btn:
             region=None if region == "Single Country" else region
         )
 
-    st.session_state.running = False
-
-    # -------- Results --------
-    if not leads:
-        st.warning("No leads found.")
+        # -------- Results --------
+    if not excel_path or not os.path.exists(excel_path):
+        st.warning("No leads found or output directory missing.")
         st.stop()
 
-    st.success(f"Found {len(leads)} companies")
-    st.dataframe(leads, width='stretch')
+    st.success("Lead generation completed (or safely stopped).")
 
-    # -------- Excel download (SAFE) --------
-    if excel_path and os.path.exists(excel_path):
-        with open(excel_path, "rb") as f:
-            st.download_button(
-                label="⬇️ Download Excel",
-                data=f,
-                file_name=os.path.basename(excel_path),
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-    else:
-        st.warning("Excel file could not be generated.")
+    # -------- List generated Excel files --------
+    files = sorted(
+        f for f in os.listdir(excel_path)
+        if f.endswith(".xlsx")
+    )
+
+    if not files:
+        st.warning("No Excel files generated yet.")
+        st.stop()
+
+    st.subheader("📂 Generated Country Files")
+
+    for file in files:
+        file_path = os.path.join(excel_path, file)
+
+        with st.expander(f"📄 {file}", expanded=False):
+
+            # ---- Preview ----
+            try:
+                df = pd.read_excel(file_path)
+                st.write(f"Rows: {len(df)}")
+                st.dataframe(df, width='stretch')
+            except Exception:
+                st.warning("Could not preview this file.")
+
+            # ---- Download ----
+            with open(file_path, "rb") as f:
+                st.download_button(
+                    label=f"⬇️ Download {file}",
+                    data=f,
+                    file_name=file,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )

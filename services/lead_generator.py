@@ -5,7 +5,8 @@ import re
 from scraper.google_search_selenium import search_companies
 from scraper.website_scraper import scrape_company
 from scraper.linkedin_finder import find_linkedin
-from services.excel_service import generate_excel
+from services.excel_service import append_to_excel
+from services.progress_service import load_progress, save_progress
 from config.regions import REGIONS
 
 # ---------------- CONFIG ---------------- #
@@ -16,7 +17,6 @@ BAD_EXTENSIONS = (
 
 DELAY_BETWEEN_QUERIES = 1.5
 
-# ❌ Countries to EXCLUDE
 CHINA_KEYWORDS = [
     "china", "prc", "made in china", "shanghai",
     "shenzhen", "beijing", "guangzhou"
@@ -31,10 +31,25 @@ INDIA_KEYWORDS = [
 CHINA_TLDS = (".cn", ".com.cn")
 INDIA_TLDS = (".in", ".co.in")
 
-CHINA_PHONE = re.compile(r"\+?86")
-INDIA_PHONE = re.compile(r"\+?91")
+COUNTRY_PHONE_CODES = {
+    "israel": "+972",
+    "germany": "+49",
+    "france": "+33",
+    "italy": "+39",
+    "spain": "+34",
+    "uk": "+44",
+    "united kingdom": "+44",
+    "netherlands": "+31",
+    "belgium": "+32",
+    "switzerland": "+41",
+    "austria": "+43",
+    "sweden": "+46",
+    "norway": "+47",
+    "finland": "+358",
+    "poland": "+48",
+}
 
-# ---------------- HELPERS ---------------- #
+# -------------------------------------- #
 
 def is_valid_url(url: str) -> bool:
     parsed = urlparse(url)
@@ -45,11 +60,11 @@ def is_valid_url(url: str) -> bool:
     return True
 
 
-def split_product_terms(product_string: str) -> list[str]:
+def split_product_terms(product_string: str):
     return [p.strip() for p in product_string.split(",") if p.strip()]
 
 
-def resolve_countries(country: str | None, region: str | None) -> list[str]:
+def resolve_countries(country, region):
     if region and region in REGIONS:
         return REGIONS[region]
     if country:
@@ -57,19 +72,14 @@ def resolve_countries(country: str | None, region: str | None) -> list[str]:
     return []
 
 
-def detect_keywords(text: str, keywords: list[str]) -> bool:
+def detect_keywords(text, keywords):
     if not text:
         return False
     text = text.lower()
     return any(k in text for k in keywords)
 
 
-# 🔥 STRICT COUNTRY VALIDATION
-def is_valid_for_selected_country(data: dict, domain: str, country: str) -> bool:
-    """
-    ACCEPT ONLY if company clearly belongs to selected country
-    """
-
+def is_valid_for_selected_country(data, domain, country):
     country = country.lower()
 
     combined_text = " ".join([
@@ -81,71 +91,45 @@ def is_valid_for_selected_country(data: dict, domain: str, country: str) -> bool
 
     phone = data.get("phone", "")
 
-    # 🚫 HARD EXCLUSIONS (China / India)
+    # 🚫 HARD EXCLUSIONS
     if detect_keywords(combined_text, CHINA_KEYWORDS):
         return False
     if detect_keywords(combined_text, INDIA_KEYWORDS):
         return False
     if domain.endswith(CHINA_TLDS) or domain.endswith(INDIA_TLDS):
         return False
-    if CHINA_PHONE.search(phone) or INDIA_PHONE.search(phone):
-        return False
 
-    # ✅ POSITIVE country signals (REQUIRED)
-    positive_signals = 0
-
-    # Country name
+    # ✅ POSITIVE SIGNALS (ANY ONE IS ENOUGH)
     if country in combined_text:
-        positive_signals += 1
-
-    # ccTLD
-    if domain.endswith(f".{country[:2]}"):
-        positive_signals += 1
-
-    # Phone country code (basic map)
-    COUNTRY_PHONE_CODES = {
-        "israel": "+972",
-        "germany": "+49",
-        "france": "+33",
-        "italy": "+39",
-        "spain": "+34",
-        "uk": "+44",
-        "united states": "+1",
-        "usa": "+1",   
-    "netherlands": "+31",
-    "belgium": "+32",
-    "switzerland": "+41",
-    "austria": "+43",
-    "sweden": "+46",
-    "norway": "+47",
-    "finland": "+358",
-    "poland": "+48"
-    }
+        return True
 
     code = COUNTRY_PHONE_CODES.get(country)
     if code and code in phone:
-        positive_signals += 1
+        return True
 
-    # ❌ If country not clearly proven — reject
-    return positive_signals > 0
+    return False
 
 
 # ---------------- MAIN ---------------- #
 
 def generate_leads(product, country, company_types, limit, region=None):
-    print("=== Lead generation started ===")
-    print("STRICT country mode:", country)
-    print("Limit:", limit)
+    print("=== Lead generation started (RESUMABLE MODE) ===")
+
+    progress = load_progress()
+    seen_domains = set(progress["seen_domains"])
+    completed_countries = set(progress["completed_countries"])
 
     product_terms = split_product_terms(product)
     countries = resolve_countries(country, region)
 
-    leads = []
-    seen_domains = set()
-
     for c in countries:
+        if c in completed_countries:
+            print(f"⏭ Skipping completed country: {c}")
+            continue
+
         print(f"\n🌍 Country LOCKED: {c}")
         collected_for_country = 0
+        buffer = []  # ✅ RESET PER COUNTRY
 
         for term in product_terms:
             for ctype in company_types:
@@ -167,7 +151,6 @@ def generate_leads(product, country, company_types, limit, region=None):
                         continue
 
                     domain = urlparse(url).netloc.lower().replace("www.", "")
-
                     if domain in seen_domains:
                         continue
 
@@ -175,7 +158,6 @@ def generate_leads(product, country, company_types, limit, region=None):
                     data = scrape_company(url)
 
                     if not is_valid_for_selected_country(data, domain, c):
-                        print(f"🚫 Rejected (not strictly {c}): {domain}")
                         seen_domains.add(domain)
                         continue
 
@@ -188,24 +170,247 @@ def generate_leads(product, country, company_types, limit, region=None):
                     data["country"] = c
                     data["domain"] = domain
 
-                    leads.append(data)
+                    buffer.append(data)
                     seen_domains.add(domain)
                     collected_for_country += 1
 
-                    print(
-                        f"✅ Added ({collected_for_country}/{limit}): "
-                        f"{data.get('company_name')}"
-                    )
+                    print(f"✅ Added ({collected_for_country}/{limit}): {domain}")
+
+                    # 💾 SAVE EVERY 10 LEADS (COUNTRY FILE)
+                    if len(buffer) >= 10:
+                        append_to_excel(buffer, c)  # ✅ PASS COUNTRY
+                        save_progress(seen_domains, completed_countries)
+                        buffer.clear()
 
                 time.sleep(DELAY_BETWEEN_QUERIES)
 
-        print(f"✔ STRICTLY collected {collected_for_country} companies for {c}")
+        # 💾 FINAL FLUSH FOR COUNTRY
+        if buffer:
+            append_to_excel(buffer, c)
+            buffer.clear()
 
-    print(f"\n✅ Total leads collected: {len(leads)}")
+        completed_countries.add(c)
+        save_progress(seen_domains, completed_countries)
+        print(f"✔ Finished country: {c}")
 
-    excel_path = generate_excel(leads)
-    return leads, excel_path
+    print("✅ Scraping completed safely")
+    return "data/output"
 
+
+
+
+
+#================Last Working start===========================
+# from urllib.parse import urlparse
+# import time
+# import re
+
+# from scraper.google_search_selenium import search_companies
+# from scraper.website_scraper import scrape_company
+# from scraper.linkedin_finder import find_linkedin
+# from services.excel_service import generate_excel
+# from config.regions import REGIONS
+
+# # ---------------- CONFIG ---------------- #
+
+# BAD_EXTENSIONS = (
+#     ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".zip"
+# )
+
+# DELAY_BETWEEN_QUERIES = 1.5
+
+# # ❌ Countries to EXCLUDE
+# CHINA_KEYWORDS = [
+#     "china", "prc", "made in china", "shanghai",
+#     "shenzhen", "beijing", "guangzhou"
+# ]
+
+# INDIA_KEYWORDS = [
+#     "india", "bharat", "made in india",
+#     "mumbai", "bangalore", "chennai",
+#     "hyderabad", "pune"
+# ]
+
+# CHINA_TLDS = (".cn", ".com.cn")
+# INDIA_TLDS = (".in", ".co.in")
+
+# CHINA_PHONE = re.compile(r"\+?86")
+# INDIA_PHONE = re.compile(r"\+?91")
+
+# # ---------------- HELPERS ---------------- #
+
+# def is_valid_url(url: str) -> bool:
+#     parsed = urlparse(url)
+#     if not parsed.netloc:
+#         return False
+#     if any(url.lower().endswith(ext) for ext in BAD_EXTENSIONS):
+#         return False
+#     return True
+
+
+# def split_product_terms(product_string: str) -> list[str]:
+#     return [p.strip() for p in product_string.split(",") if p.strip()]
+
+
+# def resolve_countries(country: str | None, region: str | None) -> list[str]:
+#     if region and region in REGIONS:
+#         return REGIONS[region]
+#     if country:
+#         return [country]
+#     return []
+
+
+# def detect_keywords(text: str, keywords: list[str]) -> bool:
+#     if not text:
+#         return False
+#     text = text.lower()
+#     return any(k in text for k in keywords)
+
+
+# # 🔥 STRICT COUNTRY VALIDATION
+# def is_valid_for_selected_country(data: dict, domain: str, country: str) -> bool:
+#     """
+#     ACCEPT ONLY if company clearly belongs to selected country
+#     """
+
+#     country = country.lower()
+
+#     combined_text = " ".join([
+#         data.get("company_name", ""),
+#         data.get("about_text", ""),
+#         data.get("footer_text", ""),
+#         data.get("raw_text", ""),
+#     ]).lower()
+
+#     phone = data.get("phone", "")
+
+#     # 🚫 HARD EXCLUSIONS (China / India)
+#     if detect_keywords(combined_text, CHINA_KEYWORDS):
+#         return False
+#     if detect_keywords(combined_text, INDIA_KEYWORDS):
+#         return False
+#     if domain.endswith(CHINA_TLDS) or domain.endswith(INDIA_TLDS):
+#         return False
+#     if CHINA_PHONE.search(phone) or INDIA_PHONE.search(phone):
+#         return False
+
+#     # ✅ POSITIVE country signals (REQUIRED)
+#     positive_signals = 0
+
+#     # Country name
+#     if country in combined_text:
+#         positive_signals += 1
+
+#     # ccTLD
+#     if domain.endswith(f".{country[:2]}"):
+#         positive_signals += 1
+
+#     # Phone country code (basic map)
+#     COUNTRY_PHONE_CODES = {
+#         "israel": "+972",
+#         "germany": "+49",
+#         "france": "+33",
+#         "italy": "+39",
+#         "spain": "+34",
+#         "uk": "+44",
+#         "united states": "+1",
+#         "usa": "+1",   
+#     "netherlands": "+31",
+#     "belgium": "+32",
+#     "switzerland": "+41",
+#     "austria": "+43",
+#     "sweden": "+46",
+#     "norway": "+47",
+#     "finland": "+358",
+#     "poland": "+48"
+#     }
+
+#     code = COUNTRY_PHONE_CODES.get(country)
+#     if code and code in phone:
+#         positive_signals += 1
+
+#     # ❌ If country not clearly proven — reject
+#     return positive_signals > 0
+
+
+# # ---------------- MAIN ---------------- #
+
+# def generate_leads(product, country, company_types, limit, region=None):
+#     print("=== Lead generation started ===")
+#     print("STRICT country mode:", country)
+#     print("Limit:", limit)
+
+#     product_terms = split_product_terms(product)
+#     countries = resolve_countries(country, region)
+
+#     leads = []
+#     seen_domains = set()
+
+#     for c in countries:
+#         print(f"\n🌍 Country LOCKED: {c}")
+#         collected_for_country = 0
+
+#         for term in product_terms:
+#             for ctype in company_types:
+#                 if collected_for_country >= limit:
+#                     break
+
+#                 urls = search_companies(
+#                     product=term,
+#                     country=c,
+#                     company_types=[ctype],
+#                     max_results=limit * 5
+#                 )
+
+#                 for url in urls:
+#                     if collected_for_country >= limit:
+#                         break
+
+#                     if not is_valid_url(url):
+#                         continue
+
+#                     domain = urlparse(url).netloc.lower().replace("www.", "")
+
+#                     if domain in seen_domains:
+#                         continue
+
+#                     print(f"🔧 Scraping: {domain}")
+#                     data = scrape_company(url)
+
+#                     if not is_valid_for_selected_country(data, domain, c):
+#                         print(f"🚫 Rejected (not strictly {c}): {domain}")
+#                         seen_domains.add(domain)
+#                         continue
+
+#                     data["linkedin"] = find_linkedin(
+#                         company_name=data.get("company_name"),
+#                         website=url
+#                     )
+
+#                     data["products"] = term
+#                     data["country"] = c
+#                     data["domain"] = domain
+
+#                     leads.append(data)
+#                     seen_domains.add(domain)
+#                     collected_for_country += 1
+
+#                     print(
+#                         f"✅ Added ({collected_for_country}/{limit}): "
+#                         f"{data.get('company_name')}"
+#                     )
+
+#                 time.sleep(DELAY_BETWEEN_QUERIES)
+
+#         print(f"✔ STRICTLY collected {collected_for_country} companies for {c}")
+
+#     print(f"\n✅ Total leads collected: {len(leads)}")
+
+#     excel_path = generate_excel(leads)
+#     return leads, excel_path
+
+
+#================Last Working End===========================
 
 # from urllib.parse import urlparse
 # import time
