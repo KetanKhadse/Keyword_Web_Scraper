@@ -122,7 +122,7 @@ def search_companies(product, country, company_types, max_results):
     # options.add_argument("--no-sandbox")
     # options.add_argument("--disable-dev-shm-usage")
 
-    # ❗ DO NOT USE headless for Google
+    # # ❗ DO NOT USE headless for Google
     driver = webdriver.Chrome(options=options)
     collected = set()
     
@@ -139,7 +139,7 @@ def search_companies(product, country, company_types, max_results):
 
                 print(f"🔎 Google: {query} | Page {page + 1}")
                 driver.get(url)
-                time.sleep(15)
+                time.sleep(20)
 
                 # ✅ Handle consent (EU)
                 try:

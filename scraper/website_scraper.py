@@ -3,46 +3,71 @@ import re
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse
 
-HEADERS = {"User-Agent": "Mozilla/5.0"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0",
+    "Accept-Language": "en-US,en;q=0.9"
+}
+
 EMAIL_REGEX = r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
 PHONE_REGEX = r"(\+?\d[\d\s\-\(\)]{8,}\d)"
 
 CONNECT_TIMEOUT = 3
 READ_TIMEOUT = 5
-MAX_HTML_SIZE = 2_000_000
+MAX_HTML_SIZE = 1_000_000   # 🔥 smaller = faster
 
 
 def scrape_company(url):
+    domain = urlparse(url).netloc
+
     try:
         r = requests.get(
             url,
             headers=HEADERS,
             timeout=(CONNECT_TIMEOUT, READ_TIMEOUT),
-            stream=True
+            allow_redirects=True
         )
 
-        content = r.raw.read(MAX_HTML_SIZE, decode_content=True)
-        soup = BeautifulSoup(content, "html.parser")
+        # 🚫 Skip non-HTML
+        content_type = r.headers.get("Content-Type", "").lower()
+        if "text/html" not in content_type:
+            raise ValueError("Non-HTML content")
 
-        title = soup.title.text.strip() if soup.title else urlparse(url).netloc
-        text = soup.get_text(" ", strip=True)
+        html = r.text[:MAX_HTML_SIZE]
+        soup = BeautifulSoup(html, "html.parser")
 
-        emails = set(re.findall(EMAIL_REGEX, text))
-        phones = set(re.findall(PHONE_REGEX, text))
+        title = (
+            soup.title.text.strip()
+            if soup.title and soup.title.text
+            else domain
+        )
+
+        # ✅ Extract only meaningful text
+        texts = []
+
+        for tag in soup.find_all(["p", "a", "li", "span"]):
+            t = tag.get_text(" ", strip=True)
+            if t:
+                texts.append(t)
+
+        visible_text = " ".join(texts)[:5000]
+
+        emails = set(re.findall(EMAIL_REGEX, visible_text))
+        phones = set(re.findall(PHONE_REGEX, visible_text))
 
         return {
             "company_name": title,
             "website": url,
             "email": ", ".join(emails),
             "phone": ", ".join(phones),
-            "about_text": text[:3000],
+            "about_text": visible_text[:3000],
             "footer_text": "",
-            "raw_text": text.lower()
+            "raw_text": visible_text.lower()
         }
 
-    except Exception:
+    except Exception as e:
+        # ❗ FAST FAIL — do NOT block pipeline
         return {
-            "company_name": urlparse(url).netloc,
+            "company_name": domain,
             "website": url,
             "email": "",
             "phone": "",
@@ -50,6 +75,7 @@ def scrape_company(url):
             "footer_text": "",
             "raw_text": ""
         }
+
 
 
 #================Last Working Start ===========================

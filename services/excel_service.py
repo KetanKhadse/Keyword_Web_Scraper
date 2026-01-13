@@ -1,6 +1,7 @@
 import os
 import re
 import pandas as pd
+import uuid
 
 MAX_CELL_LENGTH = 32767
 INVALID_XML_CHARS = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F]")
@@ -28,9 +29,6 @@ def normalize_country(country: str) -> str:
 
 
 def append_to_excel(rows, country: str):
-    """
-    Append leads into a country-specific Excel file.
-    """
     if not rows:
         return None
 
@@ -46,18 +44,30 @@ def append_to_excel(rows, country: str):
 
     df_new = pd.DataFrame(cleaned_rows)
 
-    if os.path.exists(path):
-        try:
+    # 🔒 TEMP FILE (prevents Windows lock issues)
+    temp_path = path.replace(".xlsx", f"_{uuid.uuid4().hex}.xlsx")
+
+    try:
+        if os.path.exists(path):
             df_existing = pd.read_excel(path, engine="openpyxl")
             df_final = pd.concat([df_existing, df_new], ignore_index=True)
-        except Exception:
-            fallback = path.replace(".xlsx", "_recovered.xlsx")
-            df_new.to_excel(fallback, index=False, engine="openpyxl")
-            return path
-    else:
-        df_final = df_new
+        else:
+            df_final = df_new
 
-    df_final.to_excel(path, index=False, engine="openpyxl")
+        df_final.to_excel(temp_path, index=False, engine="openpyxl")
+
+        # 🔁 Atomic replace (Windows safe)
+        os.replace(temp_path, path)
+
+    except PermissionError:
+        # fallback — never crash the scraper
+        fallback = path.replace(".xlsx", "_recovered.xlsx")
+        df_new.to_excel(fallback, index=False, engine="openpyxl")
+
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
     return path
 
 
